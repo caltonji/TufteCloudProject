@@ -68,7 +68,7 @@ if __name__ == "__main__":
         framedData.append((dt.timetuple().tm_yday, dt.hour * 60 + dt.minute, item[1]))
 
     df = pd.DataFrame(framedData, columns=["day", "minute", "opacity"])
-    df = df.pivot_table(index='day', columns='minute', values='opacity')
+    df = df.pivot_table(index='minute', columns='day', values='opacity')
     # im = Image.new('RGBA', (width, height))
     # draw = ImageDraw.Draw(im)
     # # draw.rectangle([(0, 0), (width, height)], fill=(0, 0, 0, 255))
@@ -77,7 +77,10 @@ if __name__ == "__main__":
     #     opacity = averagePoints(weatherData[i:i+countToAverageOn])
     #     draw.line([(i/countToAverageOn,0),(i/countToAverageOn,height)], fill=(0,0,0, int(255 * opacity)), width=1)
     # im.show()
+
     print(df)
     print(type(df).__name__)
-    ax = sns.heatmap(df)
+    sns.set()
+    blackPattern = sns.light_palette("black", n_colors=5)
+    ax = sns.heatmap(df, cmap=blackPattern)
     plt.show()
