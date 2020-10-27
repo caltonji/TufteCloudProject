@@ -1,13 +1,7 @@
 import os
 from datetime import datetime
-from PIL import Image, ImageDraw
 
-countToAverageOn = 12
-width = int(365 * 24 * 60 / 5 / countToAverageOn)
-# width = 10000
-height = 500
-
-designationMap = {
+designationToCloudiness = {
     "CLR" : 0.0,
     "FEW" : 2/8,
     "SCT" : 4/8, 
@@ -16,21 +10,33 @@ designationMap = {
     "VV0" : 1.0
 }
 
-def extractLastSkyDesignation(items):
+# Example data
+# 24234KBFI BFI20180301000011603/01/18 00:00:31  5-MIN KBFI 010800Z 17008KT 10SM -RA OVC045 08/04 A2949 420 73 -200 160/08 RMK AO2 P0000 T00830039
+#                             DATE     TIME                                          SKY CONDITION
+# OVC045 means Overcast at a height of 4500 feet.
+# OVC is a Okta measurement, to read into that you can read here: https://en.wikipedia.org/wiki/Okta
+# To understand Sky condition, you can read the docs in td6401b.txt related to Sky Condition.
+# 
+# I'm abstracting Sky Condition into a float between 0 and 1
+# Also I'm not positive that every 5 minute time period is represented.
+# We can also pull 1 minute data frm here if needed ftp://ftp.ncdc.noaa.gov/pub/data/asos-onemin/
+
+def extractFurthestSkyDesignation(items):
+    # iterate backwards to find the last sky designation
+    # The last sky designation is the furthest and will also be the most covering
     for item in items[::-1]:
         if len(item) >= 3:
             if item[0:3] in ["FEW", "CLR", "SCT", "BKN", "OVC", "VV0"]:
                 return item[0:3]
     return None
 
-def getAmountOfDesignation(desigation):
-    return designationMap[desigation]
-
-def averagePoints(data):
-    total = 0.0
-    for dataPoint in data:
-        total += getAmountOfDesignation(dataPoint[1])
-    return total / len(data)
+def getTimeAndDesignation(line):
+    items = line.split()
+    date = items[1][-8:]
+    time = items[2]
+    timeOfOccurence = datetime.strptime(date + " " + time, '%m/%d/%y %H:%M:%S')
+    designation = extractFurthestSkyDesignation(items)
+    return (timeOfOccurence, designation)
 
 def buildOrderedData(folderName):
     data = []
@@ -38,25 +44,12 @@ def buildOrderedData(folderName):
     for path in os.listdir(folderName):
         with open(os.path.join(folderName, path)) as fp:
             for line in fp:
-                items = line.split()
-                # print(items)
-                date = items[1][-8:]
-                time = items[2]
-                timeOfOccurence = datetime.strptime(date + " " + time, '%m/%d/%y %H:%M:%S')
-                designation = extractLastSkyDesignation(items)
+                (timeOfOccurence, designation) = getTimeAndDesignation(line)
                 if designation == None:
                     designation = lastDesignation
-                data.append((timeOfOccurence, designation))
-                lastDesignation = designation
-    return sorted(data, key=lambda x: x[0])
+                cloudiness = designationToCloudiness[designation]
+                data.append((timeOfOccurence, cloudiness))
 
-if __name__ == "__main__":
-    weatherData = buildOrderedData("./boeing2018")
-    im = Image.new('RGBA', (width, height))
-    draw = ImageDraw.Draw(im)
-    # draw.rectangle([(0, 0), (width, height)], fill=(0, 0, 0, 255))
-    for i in range(0, len(weatherData), countToAverageOn):
-        opacity = averagePoints(weatherData[i:i+countToAverageOn])
-        draw.line([(i/countToAverageOn,0),(i/countToAverageOn,height)], fill=(0,0,0, int(255 * opacity)), width=1)
-    
-    im.show()
+                lastDesignation = designation
+    # sort by time
+    return sorted(data, key=lambda x: x[0])
